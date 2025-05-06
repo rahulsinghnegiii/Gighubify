@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public read access to all collections
+    match /{document=**} {
+      allow read: if true;
+    }
+    
+    // Users collection - allow authenticated users to read any user profile
+    // and only modify their own profile
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true; // For development; in production: request.auth != null && request.auth.uid == userId
+    }
+    
+    // Services collection - allow read for all, write for authenticated users
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if true; // For development; in production: request.auth != null
+    }
+    
+    // Orders collection - allow authenticated users to read their own orders
+    match /orders/{orderId} {
+      allow read: if true;
+      allow write: if true; // For development
+    }
+    
+    // Reviews collection - allow read for all, write for authenticated users
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if true; // For development
+    }
+    
+    // Messages collection - allow authenticated users to read/write messages
+    match /messages/{messageId} {
+      allow read: if true;
+      allow write: if true; // For development
+    }
+  }
+} 

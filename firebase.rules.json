@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "users": {
+      ".read": "true",
+      ".write": "true"
+    },
+    "services": {
+      ".read": "true",
+      ".write": "true"
+    },
+    "orders": {
+      ".read": "true",
+      ".write": "true"
+    },
+    "reviews": {
+      ".read": "true",
+      ".write": "true"
+    },
+    "messages": {
+      ".read": "true",
+      ".write": "true"
+    }
+  }
+} 
