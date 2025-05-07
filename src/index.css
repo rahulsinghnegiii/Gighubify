@@ -133,7 +133,7 @@
   }
   
   .video-player-container:hover:not(.paused) {
-    @apply shadow-xl transform scale-[1.01];
+    @apply shadow-xl;
   }
   
   .video-player-container:focus-within {

@@ -179,7 +179,7 @@ const BestVideoEdits: React.FC<VideoEditDisplayProps> = ({ limit = 4 }) => {
             <div className="lg:col-span-8 video-player-container relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
               {/* Direct iframe embed with full origin parameter */}
               <div className="youtube-player-wrapper">
-                <YouTubePlayer videoId={videoEdits[activeIndex]?.videoId} />
+                <YouTubePlayer videoId={videoEdits[activeIndex]?.videoId} autoplay={true} />
               </div>
               
               {/* Video info overlay */}

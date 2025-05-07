@@ -3,6 +3,7 @@ import React from 'react';
 interface YouTubePlayerProps {
   videoId: string;
   className?: string;
+  autoplay?: boolean;
 }
 
 /**
@@ -11,7 +12,8 @@ interface YouTubePlayerProps {
  */
 const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ 
   videoId, 
-  className = '' 
+  className = '',
+  autoplay = true
 }) => {
   // The key is to use window.location.origin as the exact origin parameter
   const origin = encodeURIComponent(window.location.origin);
@@ -19,7 +21,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   return (
     <div className={`youtube-player-wrapper ${className}`}>
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${origin}`}
+        src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${origin}&autoplay=${autoplay ? 1 : 0}&mute=${autoplay ? 1 : 0}&controls=1&modestbranding=1&rel=0&showinfo=0`}
         width="100%"
         height="100%"
         frameBorder="0"
