@@ -10,6 +10,9 @@ import {
 } from '../firebase/firestore';
 import { Service, ServiceFilter } from '../models/service.model';
 import { uploadServiceImage } from '../firebase/storage';
+import { collection, where, getDocs, query, limit as limitQuery } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
+import { DocumentData, Query, WhereFilterOp } from 'firebase/firestore';
 
 /**
  * Create a new service/gig
@@ -49,50 +52,108 @@ export const subscribeToService = (
 /**
  * Get all services with optional filtering
  */
-export const getServices = async (filter?: ServiceFilter): Promise<Service[]> => {
-  const options: any = {};
-  const whereConditions: [string, any, any][] = [];
-  
-  // Apply filters if provided
-  if (filter) {
+export const getServices = async (filter: ServiceFilter = {}, limit: number = 20): Promise<Service[]> => {
+  try {
+    // Create query with where conditions
+    const collectionRef = collection(db, 'services');
+    const whereConditions: [string, WhereFilterOp, any][] = [];
+    
+    // Add where conditions based on filter
+    if (filter.minPrice !== undefined && filter.minPrice > 0) {
+      whereConditions.push(['packages.0.price', '>=', filter.minPrice]);
+    }
+    
+    if (filter.maxPrice !== undefined) {
+      whereConditions.push(['packages.0.price', '<=', filter.maxPrice]);
+    }
+    
     if (filter.category) {
       whereConditions.push(['category', '==', filter.category]);
     }
     
-    if (filter.subcategory) {
-      whereConditions.push(['subcategory', '==', filter.subcategory]);
+    if (filter.isStarterGig) {
+      whereConditions.push(['isStarterGig', '==', true]);
     }
     
-    if (filter.minRating) {
-      whereConditions.push(['averageRating', '>=', filter.minRating]);
+    // Apply where conditions to query
+    let firestoreQuery: Query<DocumentData>;
+    
+    if (whereConditions.length > 0) {
+      // Build the query with conditions
+      const queryConstraints = whereConditions.map(condition => 
+        where(condition[0], condition[1], condition[2])
+      );
+      
+      // Add limit constraint
+      queryConstraints.push(limitQuery(limit));
+      
+      // Create the query with all constraints
+      firestoreQuery = query(collectionRef, ...queryConstraints);
+    } else {
+      // Simple query with just the limit
+      firestoreQuery = query(collectionRef, limitQuery(limit));
     }
     
+    // Execute query
+    const querySnapshot = await getDocs(firestoreQuery);
+    let services: Service[] = [];
+    
+    // Convert query results to Service objects
+    querySnapshot.forEach((doc) => {
+      const data = doc.data() as Partial<Service>;
+      services.push({
+        ...data,
+        id: doc.id
+      } as Service);
+    });
+    
+    // Apply additional filters that can't be done directly in Firestore
+    
+    // Filter by categories array (if specified)
+    if (filter.categories && filter.categories.length > 0) {
+      services = services.filter(service => 
+        filter.categories!.includes(service.category)
+      );
+    }
+    
+    // Filter by tags (we can only use one array-contains-any per query in Firestore)
     if (filter.tags && filter.tags.length > 0) {
-      // Note: This is a simplification - array-contains-any would be more appropriate
-      // but is limited to 10 values and can't be combined with other array queries
-      whereConditions.push(['tags', 'array-contains-any', filter.tags.slice(0, 10)]);
+      const tagsSet = new Set(filter.tags);
+      services = services.filter(service => 
+        service.tags && service.tags.some(tag => tagsSet.has(tag))
+      );
     }
     
-    if (filter.searchTerm) {
-      // Note: Full text search would require a specialized solution like Algolia
-      // This is a simple approximation
-      whereConditions.push(['title', '>=', filter.searchTerm]);
-      whereConditions.push(['title', '<=', filter.searchTerm + '\uf8ff']);
+    // Filter by vibes (similar to tags)
+    if (filter.vibes && filter.vibes.length > 0) {
+      const vibesSet = new Set(filter.vibes);
+      services = services.filter(service => 
+        service.vibes && service.vibes.some(vibe => vibesSet.has(vibe))
+      );
     }
+    
+    // Filter by express delivery (24 hours or less)
+    if (filter.expressDelivery) {
+      services = services.filter(service => {
+        const deliveryTimeInHours = (service.packages[0]?.deliveryTime || 1) * 24;
+        return deliveryTimeInHours <= 24;
+      });
+    }
+    
+    // Search query - filter by title or description (case insensitive)
+    if (filter.searchQuery) {
+      const searchLower = filter.searchQuery.toLowerCase();
+      services = services.filter(service => 
+        service.title.toLowerCase().includes(searchLower) || 
+        service.description.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return services;
+  } catch (error) {
+    console.error('Error getting services:', error);
+    throw error;
   }
-  
-  // Always filter for active services
-  whereConditions.push(['isActive', '==', true]);
-  
-  if (whereConditions.length > 0) {
-    options.whereConditions = whereConditions;
-  }
-  
-  // Set orderBy if specified, default to newest first
-  options.orderByField = 'createdAt';
-  options.orderDirection = 'desc';
-  
-  return await getDocuments<Service>(COLLECTIONS.SERVICES, options);
 };
 
 /**

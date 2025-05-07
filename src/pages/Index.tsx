@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Hero from '@/components/Hero';
 import Features from '@/components/Features';
+import TrendingGigs from '@/components/TrendingGigs';
+import FreshPicks from '@/components/FreshPicks';
+import StarterGigs from '@/components/StarterGigs';
+import ExpressDelivery from '@/components/ExpressDelivery';
+import BestVideoEdits from '@/components/BestVideoEdits';
 import { ArrowRight, Star, Clock, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ServiceCard from '@/components/ServiceCard';
@@ -196,6 +201,10 @@ const Index = () => {
       thumbnailUrl = 'https://images.unsplash.com/photo-1574717024453-354056aafa98?ixlib=rb-4.0.3&auto=format&fit=crop&w=2700&q=80';
     }
     
+    // Check if this is an express delivery service (≤ 24 hours)
+    const deliveryTimeInHours = (service.packages[0]?.deliveryTime || 1) * 24; // Convert days to hours
+    const isExpressDelivery = deliveryTimeInHours <= 24;
+    
     const result = {
       id: service.id,
       title: service.title,
@@ -203,7 +212,10 @@ const Index = () => {
       description: service.description,
       rating: service.averageRating || 5.0,
       deliveryTime: `${service.packages[0]?.deliveryTime || 1} days`,
-      image: thumbnailUrl 
+      image: thumbnailUrl,
+      isStarterGig: service.isStarterGig || false,
+      isExpressDelivery,
+      vibes: service.vibes || []
     };
     
     console.log(`Final image URL for ${service.id}: ${result.image.substring(0, 50)}...`);
@@ -214,6 +226,18 @@ const Index = () => {
     <main>
       <Hero />
       <Features />
+      
+      {/* Trending Gigs Section */}
+      <TrendingGigs limit={8} showFilter={true} />
+      
+      {/* Fresh Picks Section */}
+      <FreshPicks limit={6} />
+      
+      {/* $5 Starter Gigs Section */}
+      <StarterGigs limit={6} />
+      
+      {/* Express Delivery Section */}
+      <ExpressDelivery limit={6} />
       
       {/* Popular Categories */}
       <section className="py-16 md:py-24 bg-background">
@@ -281,6 +305,9 @@ const Index = () => {
           ) : null}
         </div>
       </section>
+      
+      {/* Best Video Edits Showcase */}
+      <BestVideoEdits limit={6} />
       
       {/* How It Works */}
       <section className="py-16 md:py-24 bg-accent/30">

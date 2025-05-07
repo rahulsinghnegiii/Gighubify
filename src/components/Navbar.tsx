@@ -115,12 +115,12 @@ const Navbar = () => {
               Contact
             </Link>
             {!currentUser && (
-              <Link 
-                to="/become-seller" 
-                className={`font-medium transition-colors hover:text-primary ${location.pathname === '/become-seller' ? 'text-primary' : 'text-foreground/80'}`}
-              >
-                Become a Seller
-              </Link>
+            <Link 
+              to="/become-seller" 
+              className={`font-medium transition-colors hover:text-primary ${location.pathname === '/become-seller' ? 'text-primary' : 'text-foreground/80'}`}
+            >
+              Become a Seller
+            </Link>
             )}
             {currentUser && isSeller && (
               <Link 
@@ -133,18 +133,18 @@ const Navbar = () => {
             <div className="flex items-center space-x-4">
               {!currentUser ? (
                 <>
-                  <Link 
-                    to="/signin" 
-                    className={`font-medium transition-colors hover:text-primary ${location.pathname === '/signin' ? 'text-primary' : 'text-foreground/80'}`}
-                  >
-                    Sign In
-                  </Link>
-                  <Link 
-                    to="/signup" 
-                    className="btn-primary"
-                  >
-                    Sign Up
-                  </Link>
+              <Link 
+                to="/signin" 
+                className={`font-medium transition-colors hover:text-primary ${location.pathname === '/signin' ? 'text-primary' : 'text-foreground/80'}`}
+              >
+                Sign In
+              </Link>
+              <Link 
+                to="/signup" 
+                className="btn-primary"
+              >
+                Sign Up
+              </Link>
                 </>
               ) : (
                 <div className="relative">
@@ -209,13 +209,13 @@ const Navbar = () => {
               )}
               
               {currentUser && isSeller && (
-                <Link
-                  to="/add-gig"
-                  className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
-                  title="Add a new gig"
-                >
-                  <PlusCircle size={20} />
-                </Link>
+              <Link
+                to="/add-gig"
+                className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+                title="Add a new gig"
+              >
+                <PlusCircle size={20} />
+              </Link>
               )}
               
               <button 
@@ -231,13 +231,13 @@ const Navbar = () => {
           {/* Mobile menu button */}
           <div className="flex md:hidden items-center space-x-4">
             {currentUser && isSeller && (
-              <Link
-                to="/add-gig"
-                className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
-                title="Add a new gig"
-              >
-                <PlusCircle size={20} />
-              </Link>
+            <Link
+              to="/add-gig"
+              className="p-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+              title="Add a new gig"
+            >
+              <PlusCircle size={20} />
+            </Link>
             )}
             
             {currentUser && (
@@ -346,13 +346,13 @@ const Navbar = () => {
               Contact
             </Link>
             {!currentUser && (
-              <Link 
-                to="/become-seller" 
-                onClick={closeMenu}
-                className={`font-medium transition-colors hover:text-primary ${location.pathname === '/become-seller' ? 'text-primary' : 'text-foreground/80'}`}
-              >
-                Become a Seller
-              </Link>
+            <Link 
+              to="/become-seller" 
+              onClick={closeMenu}
+              className={`font-medium transition-colors hover:text-primary ${location.pathname === '/become-seller' ? 'text-primary' : 'text-foreground/80'}`}
+            >
+              Become a Seller
+            </Link>
             )}
             {currentUser && isSeller && (
               <Link 
@@ -366,20 +366,20 @@ const Navbar = () => {
             <div className="pt-2 border-t border-border">
               {!currentUser ? (
                 <>
-                  <Link 
-                    to="/signin" 
-                    onClick={closeMenu}
-                    className="block w-full mb-2 text-center py-2 font-medium transition-colors hover:text-primary"
-                  >
-                    Sign In
-                  </Link>
-                  <Link 
-                    to="/signup" 
-                    onClick={closeMenu}
-                    className="block w-full text-center py-2 btn-primary"
-                  >
-                    Sign Up
-                  </Link>
+              <Link 
+                to="/signin" 
+                onClick={closeMenu}
+                className="block w-full mb-2 text-center py-2 font-medium transition-colors hover:text-primary"
+              >
+                Sign In
+              </Link>
+              <Link 
+                to="/signup" 
+                onClick={closeMenu}
+                className="block w-full text-center py-2 btn-primary"
+              >
+                Sign Up
+              </Link>
                 </>
               ) : (
                 <>

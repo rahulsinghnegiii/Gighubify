@@ -2,10 +2,11 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { createService } from '@/lib/services/service.service';
-import { Package, ArrowLeft, Image, Video, Music, Upload, X, Plus, ImagePlus, Info } from 'lucide-react';
+import { Package, ArrowLeft, Image, Video, Music, Upload, X, Plus, ImagePlus, Info, Tag } from 'lucide-react';
 import { uploadServiceMedia, MediaItem } from '@/lib/services/media.service';
 import { MediaType } from '@/lib/utils/cloudinaryUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { EditorVibes } from '@/lib/models/service.model';
 
 const CreateService = () => {
   const { currentUser } = useAuth();
@@ -18,9 +19,11 @@ const CreateService = () => {
   const [price, setPrice] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
   const [tags, setTags] = useState('');
+  const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isStarterGig, setIsStarterGig] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Supported file types
@@ -28,6 +31,15 @@ const CreateService = () => {
     image: 'image/jpeg, image/png, image/gif, image/webp',
     video: 'video/mp4, video/webm, video/quicktime',
     audio: 'audio/mpeg, audio/wav, audio/ogg'
+  };
+  
+  // Toggle a vibe selection
+  const toggleVibe = (vibe: string) => {
+    setSelectedVibes(prev => 
+      prev.includes(vibe) 
+        ? prev.filter(v => v !== vibe) 
+        : [...prev, vibe]
+    );
   };
   
   // Handle file selection
@@ -133,14 +145,41 @@ const CreateService = () => {
     })));
   };
   
+  // Handle starter gig checkbox change
+  const handleStarterGigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setIsStarterGig(isChecked);
+    
+    // If it's a starter gig, set price to $5
+    if (isChecked) {
+      setPrice('5');
+    }
+  };
+  
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!currentUser) return;
     
+    // Validate starter gig has $5 price
+    if (isStarterGig && parseFloat(price) !== 5) {
+      toast({
+        title: "Invalid price for Starter Gig",
+        description: "Starter Gigs must be priced at exactly $5.",
+        variant: "destructive"
+      });
+      setPrice('5');
+      return;
+    }
+    
     try {
       setIsLoading(true);
+      
+      // Calculate delivery time in hours to determine if this is an express delivery
+      const deliveryTimeValue = parseInt(deliveryTime) || 3;
+      const deliveryTimeInHours = deliveryTimeValue * 24;
+      const isExpressDelivery = deliveryTimeInHours <= 24;
       
       const serviceData = {
         title,
@@ -159,13 +198,16 @@ const CreateService = () => {
             id: '1',
             name: 'Basic',
             description: 'Basic package',
-            deliveryTime: parseInt(deliveryTime) || 3,
+            deliveryTime: deliveryTimeValue,
             revisions: 2,
             features: ['Feature 1', 'Feature 2'],
             price: parseFloat(price) || 50
           }
         ],
         requirements: '',
+        isStarterGig,
+        isExpressDelivery,
+        vibes: selectedVibes,
         isActive: true
       };
       
@@ -470,7 +512,13 @@ const CreateService = () => {
                   step="0.01"
                   className="w-full py-2 px-3 rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
                   required
+                  disabled={isStarterGig}
                 />
+                {isStarterGig && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Price is fixed at $5 for Starter Gigs
+                  </p>
+                )}
               </div>
               
               <div>
@@ -505,6 +553,57 @@ const CreateService = () => {
               <p className="text-xs text-muted-foreground mt-1">
                 Enter tags separated by commas to help buyers find your service
               </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Editor Vibes <span className="text-sm font-normal text-muted-foreground">(Select up to 5)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EditorVibes.map((vibe) => (
+                  <button
+                    key={vibe}
+                    type="button"
+                    onClick={() => toggleVibe(vibe)}
+                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                      selectedVibes.includes(vibe)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-accent/30'
+                    }`}
+                    disabled={selectedVibes.length >= 5 && !selectedVibes.includes(vibe)}
+                  >
+                    {vibe}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Choose vibes that best describe your editing style to help buyers find services matching their preferences
+              </p>
+            </div>
+            
+            <div className="border-t border-border pt-4">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="starter-gig"
+                    type="checkbox"
+                    checked={isStarterGig}
+                    onChange={handleStarterGigChange}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="starter-gig" className="font-medium flex items-center">
+                    <Tag className="h-4 w-4 text-green-600 mr-1" />
+                    Mark as $5 Starter Gig
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-500/20 text-green-600 rounded">New</span>
+                  </label>
+                  <p className="text-muted-foreground mt-1">
+                    Starter Gigs are priced at exactly $5 and are designed to attract new buyers. 
+                    They help you establish your presence on the platform by offering a simple, entry-level service.
+                  </p>
+                </div>
+              </div>
             </div>
             
             <div className="pt-4">

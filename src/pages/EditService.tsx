@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { getService, updateService } from '@/lib/services/service.service';
-import { ArrowLeft, Image, Video, Music, Upload, X, Plus, Trash2, ImagePlus, Info } from 'lucide-react';
+import { ArrowLeft, Image, Video, Music, Upload, X, Plus, Trash2, ImagePlus, Info, Tag } from 'lucide-react';
 import { MediaItem, uploadServiceMedia, removeServiceMedia, setServiceThumbnail } from '@/lib/services/media.service';
 import { MediaType } from '@/lib/utils/cloudinaryUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { EditorVibes } from '@/lib/models/service.model';
 
 const EditService = () => {
   const { currentUser } = useAuth();
@@ -22,8 +23,22 @@ const EditService = () => {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
+  const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isStarterGig, setIsStarterGig] = useState(false);
+  const [deliveryTime, setDeliveryTime] = useState('');
+  const [category, setCategory] = useState('');
+  const [tags, setTags] = useState('');
+  
+  // Toggle a vibe selection
+  const toggleVibe = (vibe: string) => {
+    setSelectedVibes(prev => 
+      prev.includes(vibe) 
+        ? prev.filter(v => v !== vibe) 
+        : [...prev, vibe]
+    );
+  };
   
   // Supported file types
   const supportedFileTypes = {
@@ -32,12 +47,24 @@ const EditService = () => {
     audio: 'audio/mpeg, audio/wav, audio/ogg'
   };
   
+  // Handle starter gig checkbox change
+  const handleStarterGigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setIsStarterGig(isChecked);
+    
+    // If it's a starter gig, set price to $5
+    if (isChecked) {
+      setPrice('5');
+    }
+  };
+  
   useEffect(() => {
+    if (!id || !currentUser) return;
+    
     const fetchService = async () => {
-      if (!id || !currentUser) return;
-      
       try {
         setLoading(true);
+        
         const service = await getService(id);
         
         if (!service) {
@@ -45,44 +72,42 @@ const EditService = () => {
           return;
         }
         
-        // Check if this service belongs to the current user
+        // Ensure this seller owns this service
         if (service.sellerId !== currentUser.uid) {
           setError('You do not have permission to edit this service');
+          navigate('/seller/dashboard');
           return;
         }
         
-        // Set form fields with service data
+        // Set form fields
         setTitle(service.title);
         setDescription(service.description);
         setPrice(service.packages[0]?.price.toString() || '');
+        setDeliveryTime(service.packages[0]?.deliveryTime.toString() || '');
+        setCategory(service.category || '');
+        setTags(service.tags?.join(', ') || '');
         
-        // Set media data
+        // Set media items
         if (service.media && service.media.length > 0) {
           setMedia(service.media);
-        } else if (service.images && service.images.length > 0) {
-          // Convert legacy images to media format
-          const legacyMedia: MediaItem[] = service.images.map((url, index) => ({
-            id: `legacy_${index}`,
-            url,
-            type: MediaType.IMAGE,
-            format: 'webp',
-            isThumbnail: url === service.thumbnail,
-            width: 600,
-            height: 400
-          }));
-          setMedia(legacyMedia);
         }
         
+        // Set starter gig status
+        setIsStarterGig(service.isStarterGig || false);
+        
+        // Set vibes
+        setSelectedVibes(service.vibes || []);
+        
+        setLoading(false);
       } catch (err) {
         console.error('Error fetching service:', err);
-        setError('Failed to load service data');
-      } finally {
+        setError('Failed to load service');
         setLoading(false);
       }
     };
     
     fetchService();
-  }, [id, currentUser]);
+  }, [id, currentUser, navigate]);
   
   // Handle file selection for upload
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,8 +260,24 @@ const EditService = () => {
     
     if (!id || !currentUser) return;
     
+    // Validate starter gig has $5 price
+    if (isStarterGig && parseFloat(price) !== 5) {
+      toast({
+        title: "Invalid price for Starter Gig",
+        description: "Starter Gigs must be priced at exactly $5.",
+        variant: "destructive"
+      });
+      setPrice('5');
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
+      
+      // Calculate delivery time in hours to determine if this is an express delivery
+      const deliveryTimeValue = parseInt(deliveryTime) || 3;
+      const deliveryTimeInHours = deliveryTimeValue * 24;
+      const isExpressDelivery = deliveryTimeInHours <= 24;
       
       // Get the current service first
       const currentService = await getService(id);
@@ -249,12 +290,18 @@ const EditService = () => {
       await updateService(id, {
         title,
         description,
+        category,
+        tags: tags.split(',').map(tag => tag.trim()),
         packages: [{
           ...currentService.packages[0],
-          price: parseFloat(price)
+          price: parseFloat(price) || 50,
+          deliveryTime: deliveryTimeValue
         }],
         media,
-        thumbnail: media.find(item => item.isThumbnail)?.url || ''
+        thumbnail: media.find(item => item.isThumbnail)?.url || '',
+        isStarterGig,
+        isExpressDelivery,
+        vibes: selectedVibes
       });
       
       toast({
@@ -546,6 +593,32 @@ const EditService = () => {
             </div>
             
             <div>
+              <label className="block text-sm font-medium mb-2">
+                Editor Vibes <span className="text-sm font-normal text-muted-foreground">(Select up to 5)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EditorVibes.map((vibe) => (
+                  <button
+                    key={vibe}
+                    type="button"
+                    onClick={() => toggleVibe(vibe)}
+                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                      selectedVibes.includes(vibe)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-accent/30'
+                    }`}
+                    disabled={selectedVibes.length >= 5 && !selectedVibes.includes(vibe)}
+                  >
+                    {vibe}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Choose vibes that best describe your editing style to help buyers find services matching their preferences
+              </p>
+            </div>
+            
+            <div>
               <label htmlFor="price" className="block text-sm font-medium mb-1">
                 Basic Package Price ($)
               </label>
@@ -558,7 +631,38 @@ const EditService = () => {
                 step="0.01"
                 className="w-full py-2 px-3 rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
                 required
+                disabled={isStarterGig}
               />
+              {isStarterGig && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Price is fixed at $5 for Starter Gigs
+                </p>
+              )}
+            </div>
+            
+            <div className="border-t border-border pt-4">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="starter-gig"
+                    type="checkbox"
+                    checked={isStarterGig}
+                    onChange={handleStarterGigChange}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="starter-gig" className="font-medium flex items-center">
+                    <Tag className="h-4 w-4 text-green-600 mr-1" />
+                    Mark as $5 Starter Gig
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-500/20 text-green-600 rounded">New</span>
+                  </label>
+                  <p className="text-muted-foreground mt-1">
+                    Starter Gigs are priced at exactly $5 and are designed to attract new buyers. 
+                    They help you establish your presence on the platform by offering a simple, entry-level service.
+                  </p>
+                </div>
+              </div>
             </div>
             
             <div className="pt-4">

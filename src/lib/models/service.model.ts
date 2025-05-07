@@ -31,6 +31,16 @@ export interface Service {
   requirements?: string;
   averageRating?: number;
   totalReviews?: number;
+  /**
+   * Indicates if this is a $5 starter gig
+   * These are affordable entry-level services for new buyers
+   */
+  isStarterGig?: boolean;
+  /**
+   * Editor vibe tags to describe the style of the service
+   * Examples: Cinematic, Vlog, Tutorial, Meme, Corporate, etc.
+   */
+  vibes?: string[];
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
   isActive: boolean;
@@ -52,14 +62,16 @@ export interface FAQ {
 }
 
 export interface ServiceFilter {
-  category?: string;
-  subcategory?: string;
   minPrice?: number;
   maxPrice?: number;
-  deliveryTime?: number;
-  minRating?: number;
+  searchQuery?: string;
+  category?: string;
+  categories?: string[];
   tags?: string[];
-  searchTerm?: string;
+  userId?: string;
+  isStarterGig?: boolean;
+  vibes?: string[];
+  expressDelivery?: boolean;
 }
 
 export const ServiceCategories = [
@@ -135,4 +147,25 @@ export const ServiceCategories = [
       'Whiteboard'
     ]
   }
+];
+
+// Predefined vibe tags that editors can choose from
+export const EditorVibes = [
+  'Cinematic',
+  'Meme',
+  'Reels',
+  'Vlog',
+  'Tutorial',
+  'Corporate',
+  'Documentary',
+  'Music Video',
+  'Action',
+  'Comedy',
+  'Travel',
+  'Gaming',
+  'Aesthetic',
+  'Minimalist',
+  'Retro',
+  'Glitch',
+  'Storytelling'
 ]; 

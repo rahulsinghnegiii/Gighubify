@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Star, User as UserIcon, Calendar, CheckCircle, Image as ImageIcon, Video, Music, FileText, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ArrowLeft, Clock, Star, User as UserIcon, Calendar, CheckCircle, Image as ImageIcon, Video, Music, FileText, ChevronDown, ChevronUp, X, Tag } from 'lucide-react';
 import { getService, subscribeToService } from '@/lib/services/service.service';
 import { Service } from '@/lib/models/service.model';
 import { getUserProfile } from '@/lib/services/user.service';
@@ -198,7 +198,7 @@ const ServiceDetail = () => {
       return 'N/A';
     }
   };
-
+  
   useEffect(() => {
     // Scroll to top when the component mounts
     window.scrollTo(0, 0);
@@ -312,9 +312,9 @@ const ServiceDetail = () => {
               ) : (
                 <img 
                   src={service.images[0] || "https://images.unsplash.com/photo-1574717024453-354056aafa98?ixlib=rb-4.0.3&auto=format&fit=crop&w=2700&q=80"} 
-                  alt={service.title} 
-                  className="w-full h-auto object-cover aspect-video"
-                />
+                alt={service.title} 
+                className="w-full h-auto object-cover aspect-video"
+              />
               )}
             </div>
             
@@ -379,6 +379,27 @@ const ServiceDetail = () => {
               </div>
             )}
             
+            {/* Editor Vibes */}
+            {service.vibes && service.vibes.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Editor Vibes</h2>
+                <div className="flex flex-wrap gap-2">
+                  {service.vibes.map((vibe, index) => (
+                    <span 
+                      key={index} 
+                      className="px-3 py-1.5 bg-accent/50 text-foreground text-sm rounded-full flex items-center"
+                    >
+                      <Tag className="h-3.5 w-3.5 mr-1.5" />
+                      {vibe}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Vibes reflect the editor's style and specialization for this service
+                </p>
+              </div>
+            )}
+            
             {/* FAQs if available */}
             {service.faqs && service.faqs.length > 0 && (
               <div className="mb-8">
@@ -422,15 +443,15 @@ const ServiceDetail = () => {
                   </div>
                 </div>
               </div>
-            </div>
-            
+              </div>
+              
             {/* Seller information */}
             <div className="mt-6 bg-card rounded-xl border border-border/50 shadow-subtle overflow-hidden">
               <div className="p-6">
                 <h3 className="text-lg font-semibold mb-4">About the Seller</h3>
                 {seller ? (
                   <>
-                    <div className="flex items-center mb-4">
+                <div className="flex items-center mb-4">
                       <div className="h-16 w-16 rounded-full bg-muted mr-4 overflow-hidden">
                         {seller.photoURL ? (
                           <img 
@@ -442,13 +463,13 @@ const ServiceDetail = () => {
                           <UserIcon className="h-full w-full p-4 text-muted-foreground" />
                         )}
                       </div>
-                      <div>
+                  <div>
                         <h4 className="font-medium">{seller.displayName}</h4>
-                        <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                           {seller.bio || "Professional Video Editor"}
-                        </p>
-                      </div>
-                    </div>
+                    </p>
+                  </div>
+                </div>
                     
                     <div className="text-sm">
                       <div className="flex items-start py-2 border-b border-border/50">
@@ -457,8 +478,8 @@ const ServiceDetail = () => {
                           <span className="text-muted-foreground">Member since</span>
                           <p className="font-medium">{formatDate(seller.createdAt)}</p>
                         </div>
-                      </div>
-                    </div>
+                  </div>
+                  </div>
                   </>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sliders, X } from 'lucide-react';
+import { Search, Sliders, X, Tag } from 'lucide-react';
 import ServiceCard from '@/components/ServiceCard';
 import { getServices } from '@/lib/services/service.service';
-import { Service, ServiceFilter, ServiceCategories } from '@/lib/models/service.model';
+import { Service, ServiceFilter, ServiceCategories, EditorVibes } from '@/lib/models/service.model';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // Categories for filtering - using categories from the service model
@@ -21,7 +21,11 @@ const Explore = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     queryParams.get('category') ? [queryParams.get('category') as string] : []
   );
+  const [selectedVibes, setSelectedVibes] = useState<string[]>(
+    queryParams.get('vibes') ? queryParams.get('vibes').split(',') : []
+  );
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 300]);
+  const [showStarterGigs, setShowStarterGigs] = useState(queryParams.get('starter') === 'true');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +51,14 @@ const Explore = () => {
         if (priceRange[0] > 0 || priceRange[1] < 300) {
           filter.minPrice = priceRange[0];
           filter.maxPrice = priceRange[1];
+        }
+        
+        if (showStarterGigs) {
+          filter.isStarterGig = true;
+        }
+        
+        if (selectedVibes.length > 0) {
+          filter.vibes = selectedVibes;
         }
         
         const fetchedServices = await getServices(filter);
@@ -75,7 +87,7 @@ const Explore = () => {
     };
     
     fetchServices();
-  }, [searchTerm, selectedCategories, priceRange]);
+  }, [searchTerm, selectedCategories, priceRange, showStarterGigs, selectedVibes]);
 
   // Update URL search params when filters change
   useEffect(() => {
@@ -89,11 +101,19 @@ const Explore = () => {
       params.set('category', selectedCategories[0]);
     }
     
+    if (showStarterGigs) {
+      params.set('starter', 'true');
+    }
+    
+    if (selectedVibes.length > 0) {
+      params.set('vibes', selectedVibes.join(','));
+    }
+    
     const newUrl = 
       `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     
     navigate(newUrl, { replace: true });
-  }, [searchTerm, selectedCategories, navigate, location.pathname]);
+  }, [searchTerm, selectedCategories, showStarterGigs, selectedVibes, navigate, location.pathname]);
 
   // Scroll to top when the component mounts
   useEffect(() => {
@@ -111,10 +131,22 @@ const Explore = () => {
     });
   };
   
+  const handleVibeChange = (vibe: string) => {
+    setSelectedVibes(prev => {
+      if (prev.includes(vibe)) {
+        return prev.filter(v => v !== vibe);
+      } else {
+        return [...prev, vibe];
+      }
+    });
+  };
+  
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedCategories([]);
     setPriceRange([0, 300]);
+    setShowStarterGigs(false);
+    setSelectedVibes([]);
     navigate(location.pathname, { replace: true });
   };
 
@@ -191,7 +223,9 @@ const Explore = () => {
       description: service.description,
       rating: service.averageRating || 5.0,
       deliveryTime: `${service.packages[0]?.deliveryTime || 1} days`,
-      image: thumbnailUrl 
+      image: thumbnailUrl,
+      isStarterGig: service.isStarterGig || false,
+      vibes: service.vibes || []
     };
     
     console.log(`Final image URL for ${service.id}: ${result.image.substring(0, 50)}...`);
@@ -273,21 +307,60 @@ const Explore = () => {
                 </div>
               </div>
               
-              <div>
+              <div className="mb-6">
                 <h3 className="font-medium mb-3">Price Range</h3>
                 <div className="px-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="300"
-                    step="10"
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                    className="w-full"
-                  />
+                <input
+                  type="range"
+                  min="0"
+                  max="300"
+                  step="10"
+                  value={priceRange[1]}
+                  onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                  className="w-full"
+                />
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>${priceRange[0]}</span>
                     <span>${priceRange[1]}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <h3 className="font-medium mb-3">Editor Vibes</h3>
+                <div className="flex flex-wrap gap-2">
+                  {EditorVibes.map((vibe) => (
+                    <button
+                      key={vibe}
+                      onClick={() => handleVibeChange(vibe)}
+                      className={`px-2 py-1 text-xs rounded-full border transition-colors flex items-center ${
+                        selectedVibes.includes(vibe)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background border-border hover:bg-accent/30'
+                      }`}
+                    >
+                      <Tag className="h-3 w-3 mr-1" />
+                      {vibe}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <h3 className="font-medium mb-3">Special Offers</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="starter-gigs"
+                      checked={showStarterGigs}
+                      onChange={(e) => setShowStarterGigs(e.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                    />
+                    <label htmlFor="starter-gigs" className="ml-2 text-sm flex items-center">
+                      $5 Starter Gigs
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-500/20 text-green-600 rounded">New</span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -340,6 +413,45 @@ const Explore = () => {
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>${priceRange[0]}</span>
                       <span>${priceRange[1]}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-6">
+                  <h3 className="font-medium mb-3">Editor Vibes</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {EditorVibes.map((vibe) => (
+                      <button
+                        key={vibe}
+                        onClick={() => handleVibeChange(vibe)}
+                        className={`px-2 py-1 text-xs rounded-full border transition-colors flex items-center ${
+                          selectedVibes.includes(vibe)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-accent/30'
+                        }`}
+                      >
+                        <Tag className="h-3 w-3 mr-1" />
+                        {vibe}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="mb-6">
+                  <h3 className="font-medium mb-3">Special Offers</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="mobile-starter-gigs"
+                        checked={showStarterGigs}
+                        onChange={(e) => setShowStarterGigs(e.target.checked)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                      />
+                      <label htmlFor="mobile-starter-gigs" className="ml-2 text-sm flex items-center">
+                        $5 Starter Gigs
+                        <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-500/20 text-green-600 rounded">New</span>
+                      </label>
                     </div>
                   </div>
                 </div>

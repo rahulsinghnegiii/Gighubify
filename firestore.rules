@@ -36,5 +36,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true; // For development
     }
+    
+    // FreshPicks collection - allow read and write for the fresh picks rotation system
+    match /freshPicks/{document} {
+      allow read: if true;
+      allow write: if true; // For development
+    }
   }
 } 
