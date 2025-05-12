@@ -24,6 +24,11 @@ import { AuthProvider } from "./lib/contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CreateService from "./pages/CreateService";
 import EditService from "./pages/EditService";
+import Checkout from "./pages/Checkout";
+import TestPayment from "./pages/TestPayment";
+import PaymentDashboard from "./pages/PaymentDashboard";
+import OrderDetail from "./pages/OrderDetail";
+import Messages from "./pages/Messages";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +75,22 @@ const App = () => {
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/privacy" element={<Privacy />} />
                   <Route 
+                    path="/checkout/:orderId" 
+                    element={
+                      <ProtectedRoute>
+                        <Checkout />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/test-payment" 
+                    element={
+                      <ProtectedRoute>
+                        <TestPayment />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
                     path="/add-gig" 
                     element={
                       <ProtectedRoute>
@@ -107,6 +128,38 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <EditService />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/payment-dashboard" 
+                    element={
+                      <ProtectedRoute>
+                        <PaymentDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/order/:orderId" 
+                    element={
+                      <ProtectedRoute>
+                        <OrderDetail />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/messages" 
+                    element={
+                      <ProtectedRoute>
+                        <Messages />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/messages/:userId" 
+                    element={
+                      <ProtectedRoute>
+                        <Messages />
                       </ProtectedRoute>
                     } 
                   />

@@ -24,16 +24,26 @@ export interface Order {
   serviceId: string;
   sellerId: string;
   buyerId: string;
-  packageType: 'basic' | 'standard' | 'premium';
+  packageType?: 'basic' | 'standard' | 'premium'; // Made optional for backward compatibility
+  packageId?: string; // Added for new order structure
+  packageDetails?: { // Added for new order structure
+    name: string;
+    description?: string;
+    deliveryTime: number;
+    revisions: number;
+    price: number;
+  };
   requirements: string;
   attachments?: string[];
   price: number;
-  deliveryTime: number; // in days
+  totalAmount?: number; // Adding totalAmount field as optional for backward compatibility
+  deliveryTime?: number; // Made optional since it may be inside packageDetails
   status: OrderStatus;
   isPaid: boolean;
   createdAt: any;
   updatedAt: any;
   completedAt?: any;
+  revisionCount?: number; // Added for new order structure
 }
 
 /**

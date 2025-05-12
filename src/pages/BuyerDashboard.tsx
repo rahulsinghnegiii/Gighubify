@@ -461,6 +461,15 @@ const BuyerDashboard = () => {
                                   </button>
                                 )}
                                 
+                                {order.status === OrderStatus.PENDING && !order.isPaid && (
+                                  <button 
+                                    onClick={() => navigate(`/checkout/${order.id}`)}
+                                    className="py-1 px-3 text-xs rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+                                  >
+                                    Pay Now
+                                  </button>
+                                )}
+                                
                                 {(order.status === OrderStatus.PENDING || order.status === OrderStatus.IN_PROGRESS) && (
                                   <button className="py-1 px-3 text-xs rounded-md bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
                                     Cancel Order
@@ -470,6 +479,39 @@ const BuyerDashboard = () => {
                                 {order.status === OrderStatus.COMPLETED && (
                                   <button className="py-1 px-3 text-xs rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors">
                                     Leave Review
+                                  </button>
+                                )}
+                                
+                                {/* Message Seller Button */}
+                                {order.sellerId && (
+                                  <button 
+                                    onClick={async () => {
+                                      try {
+                                        if (!order.sellerId) {
+                                          console.error('No seller ID available for this order');
+                                          alert('Cannot message seller: Seller information not available');
+                                          return;
+                                        }
+                                        
+                                        console.log(`Attempting to navigate to messages with seller: ${order.sellerId}`);
+                                        
+                                        // Try to get the seller profile to validate the ID before navigating
+                                        const sellerExists = await getUserProfile(order.sellerId);
+                                        if (!sellerExists) {
+                                          console.error(`Seller with ID ${order.sellerId} not found in database`);
+                                          alert("Cannot message seller: User not found in our system");
+                                          return;
+                                        }
+                                        
+                                        navigate(`/messages/${order.sellerId}`);
+                                      } catch (err) {
+                                        console.error("Error navigating to messages:", err);
+                                        alert("Cannot access messaging at this time. Please try again later.");
+                                      }
+                                    }}
+                                    className="py-1 px-3 text-xs rounded-md bg-muted hover:bg-accent transition-colors"
+                                  >
+                                    Message Seller
                                   </button>
                                 )}
                               </div>

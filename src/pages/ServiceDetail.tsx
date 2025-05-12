@@ -8,6 +8,7 @@ import { User } from '@/lib/models/user.model';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MediaItem } from '@/lib/services/media.service';
 import { MediaType } from '@/lib/utils/cloudinaryUtils';
+import { createOrder } from '@/lib/services/order.service';
 
 // MediaGallery component for displaying service media
 const MediaGallery = ({ media }: { media?: MediaItem[] }) => {
@@ -233,17 +234,55 @@ const ServiceDetail = () => {
     };
   }, [id]);
   
-  const handleOrderNow = () => {
+  const handleOrderNow = async () => {
     if (!currentUser) {
       // If user is not logged in, redirect to sign in
       navigate('/signin', { state: { from: { pathname: `/service/${id}` } } });
       return;
     }
     
-    // TODO: Implement order creation logic
-    console.log('Order now clicked for service:', id);
-    // For now, just show an alert
-    alert('Ordering functionality will be implemented in the future.');
+    try {
+      setLoading(true);
+      
+      if (!service || !service.packages || service.packages.length === 0) {
+        throw new Error('Service or package information is missing');
+      }
+      
+      // Get the basic package (first package in the list)
+      const basicPackage = service.packages[0];
+      
+      // Create a new order using the selected package (basic package for now)
+      const orderData = {
+        serviceId: id || '',
+        sellerId: service.sellerId,
+        buyerId: currentUser.uid,
+        packageId: basicPackage.id || 'basic-package',
+        packageDetails: {
+          name: basicPackage.name || 'Basic Package',
+          description: basicPackage.description || service.description || 'Standard service package',
+          deliveryTime: basicPackage.deliveryTime,
+          revisions: basicPackage.revisions || 1,
+          price: basicPackage.price
+        },
+        requirements: 'Please provide details about your requirements.',
+        price: basicPackage.price,
+        totalAmount: basicPackage.price,
+        revisionCount: 0,
+        status: 'pending'
+      };
+      
+      // Create the order in Firestore
+      const orderId = await createOrder(orderData);
+      
+      // Navigate to checkout page with the order ID
+      navigate(`/checkout/${orderId}`);
+    } catch (err) {
+      console.error('Error creating order:', err);
+      // Display error message to user
+      alert('There was an error creating your order. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
   
   if (loading) {
@@ -487,7 +526,22 @@ const ServiceDetail = () => {
                   </div>
                 )}
                 
-                <button className="w-full mt-4 py-2 px-4 border border-border rounded-md text-sm font-medium hover:bg-accent/30 transition-colors">
+                <button 
+                  className="w-full mt-4 py-2 px-4 border border-border rounded-md text-sm font-medium hover:bg-accent/30 transition-colors"
+                  onClick={() => {
+                    if (!currentUser) {
+                      // If user is not logged in, redirect to sign in
+                      navigate('/signin', { state: { from: { pathname: `/service/${id}` } } });
+                      return;
+                    }
+                    
+                    if (seller && seller.id) {
+                      navigate(`/messages/${seller.id}`);
+                    } else {
+                      alert('Cannot contact seller: Seller information is not available');
+                    }
+                  }}
+                >
                   Contact Seller
                 </button>
               </div>

@@ -34,6 +34,7 @@ const COLLECTIONS = {
   ORDERS: "orders",
   REVIEWS: "reviews",
   MESSAGES: "messages",
+  PAYMENTS: "payments"
 };
 
 // Generic function to add a document with an auto-generated ID
@@ -42,11 +43,44 @@ export const addDocument = async<T extends DocumentData>(
   data: T
 ): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, collectionName), {
-      ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+    console.log(`Adding document to collection: ${collectionName}`);
+    
+    // Check if this is a subcollection path (contains '/')
+    let docRef;
+    if (collectionName.includes('/')) {
+      // Handle nested collection
+      console.log('Path contains subcollection');
+      const segments = collectionName.split('/');
+      let ref: any = db;
+      
+      // Build the path to the collection
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        if (i % 2 === 0) {
+          // Collection
+          ref = collection(ref, segment);
+        } else {
+          // Document
+          ref = doc(ref, segment);
+        }
+      }
+      
+      // The last ref should be a collection reference
+      docRef = await addDoc(ref, {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      // Regular collection
+      docRef = await addDoc(collection(db, collectionName), {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+    
+    console.log(`Document added successfully with ID: ${docRef.id}`);
     return docRef.id;
   } catch (error) {
     console.error(`Error adding document to ${collectionName}:`, error);
@@ -101,7 +135,34 @@ export const updateDocument = async<T extends DocumentData>(
   arrayRemoveOperation: boolean = false
 ): Promise<void> => {
   try {
-    const docRef = doc(db, collectionName, docId);
+    console.log(`Updating document: ${collectionName}/${docId}`);
+    
+    // Handle subcollection paths
+    let docRef;
+    if (collectionName.includes('/')) {
+      // For subcollection paths, build the reference manually
+      console.log('Subcollection path detected for update');
+      const segments = collectionName.split('/');
+      let ref: any = db;
+      
+      // Build the path to the document's parent collection
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        if (i % 2 === 0) {
+          // Collection
+          ref = collection(ref, segment);
+        } else {
+          // Document
+          ref = doc(ref, segment);
+        }
+      }
+      
+      // The last ref should be a collection reference, then get the document
+      docRef = doc(ref, docId);
+    } else {
+      // Regular collection
+      docRef = doc(db, collectionName, docId);
+    }
     
     // Check if document exists first
     const docSnapshot = await getDoc(docRef);
@@ -109,10 +170,22 @@ export const updateDocument = async<T extends DocumentData>(
     if (!docSnapshot.exists()) {
       console.log(`Document doesn't exist, creating it: ${collectionName}/${docId}`);
       // Document doesn't exist, so create it
-      return await setDocument(collectionName, docId, {
-        ...data,
-        id: docId
-      } as any);
+      if (collectionName.includes('/')) {
+        // For subcollections, use setDoc directly
+        await setDoc(docRef, {
+          ...data,
+          id: docId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        return;
+      } else {
+        // For top-level collections, use the setDocument helper
+        return await setDocument(collectionName, docId, {
+          ...data,
+          id: docId
+        } as any);
+      }
     }
     
     // Special handling for array operations if needed
@@ -135,15 +208,17 @@ export const updateDocument = async<T extends DocumentData>(
       
       updates.updatedAt = serverTimestamp();
       await updateDoc(docRef, updates);
+      console.log(`Document updated with array operations: ${collectionName}/${docId}`);
     } else {
       // Regular update
       await updateDoc(docRef, {
         ...data,
         updatedAt: serverTimestamp()
       });
+      console.log(`Document updated: ${collectionName}/${docId}`);
     }
   } catch (error) {
-    console.error(`Error updating document in ${collectionName}:`, error);
+    console.error(`Error updating document in ${collectionName}/${docId}:`, error);
     throw error;
   }
 };
@@ -173,7 +248,35 @@ export const getDocuments = async<T>(
   }
 ): Promise<T[]> => {
   try {
-    let q = collection(db, collectionName);
+    console.log(`Getting documents from collection: ${collectionName}`);
+    
+    // Handle subcollection paths
+    let collRef;
+    if (collectionName.includes('/')) {
+      // For subcollection paths, build the reference manually
+      console.log('Subcollection path detected for getDocuments');
+      const segments = collectionName.split('/');
+      let ref: any = db;
+      
+      // Build the path to the collection
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        if (i % 2 === 0) {
+          // Collection
+          ref = collection(ref, segment);
+        } else {
+          // Document
+          ref = doc(ref, segment);
+        }
+      }
+      
+      // The last ref should be a collection reference
+      collRef = ref;
+    } else {
+      // Regular collection
+      collRef = collection(db, collectionName);
+    }
+    
     let constraints = [];
 
     if (options?.whereConditions) {
@@ -195,10 +298,11 @@ export const getDocuments = async<T>(
     }
 
     const queryRef = constraints.length > 0 
-      ? query(q, ...constraints) 
-      : query(q);
+      ? query(collRef, ...constraints) 
+      : query(collRef);
 
     const querySnapshot = await getDocs(queryRef);
+    console.log(`Retrieved ${querySnapshot.docs.length} documents from ${collectionName}`);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
   } catch (error) {
     console.error(`Error getting documents from ${collectionName}:`, error);
@@ -238,7 +342,35 @@ export const subscribeToCollection = <T>(
     limitCount?: number
   }
 ): () => void => {
-  let q = collection(db, collectionName);
+  console.log(`Setting up subscription to collection: ${collectionName}`);
+  
+  // Handle subcollection paths
+  let collRef;
+  if (collectionName.includes('/')) {
+    // For subcollection paths, build the reference manually
+    console.log('Subcollection path detected for subscription');
+    const segments = collectionName.split('/');
+    let ref: any = db;
+    
+    // Build the path to the collection
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      if (i % 2 === 0) {
+        // Collection
+        ref = collection(ref, segment);
+      } else {
+        // Document
+        ref = doc(ref, segment);
+      }
+    }
+    
+    // The last ref should be a collection reference
+    collRef = ref;
+  } else {
+    // Regular collection
+    collRef = collection(db, collectionName);
+  }
+
   let constraints = [];
 
   if (options?.whereConditions) {
@@ -256,11 +388,12 @@ export const subscribeToCollection = <T>(
   }
 
   const queryRef = constraints.length > 0 
-    ? query(q, ...constraints) 
-    : query(q);
+    ? query(collRef, ...constraints) 
+    : query(collRef);
 
   const unsubscribe = onSnapshot(queryRef, (snapshot) => {
     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as T));
+    console.log(`Received ${data.length} documents in subscription to ${collectionName}`);
     callback(data);
   }, (error) => {
     console.error(`Error in subscription to ${collectionName}:`, error);

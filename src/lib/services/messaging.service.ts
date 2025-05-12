@@ -3,6 +3,7 @@ import {
   getDocument,
   getDocuments,
   subscribeToCollection,
+  updateDocument,
   COLLECTIONS
 } from '../firebase/firestore';
 import { uploadFile } from '../firebase/storage';
@@ -63,7 +64,7 @@ export const getOrCreateConversation = async (
     COLLECTIONS.MESSAGES,
     {
       participants,
-      lastMessage: undefined,
+      lastMessage: null,
     }
   );
 };
@@ -154,41 +155,80 @@ export const sendMessage = async (
   content: string,
   attachments: File[] = []
 ): Promise<string> => {
+  console.log(`Attempting to send message in conversation ${conversationId}`);
+  console.log(`Sender: ${senderId}, Receiver: ${receiverId}`);
+  
   // Upload attachments first if there are any
   const attachmentUrls: string[] = [];
   if (attachments.length > 0) {
     for (const file of attachments) {
       const filePath = `messages/${conversationId}/${senderId}/${Date.now()}_${file.name}`;
-      const url = await uploadFile(filePath, file);
-      attachmentUrls.push(url);
+      console.log(`Uploading attachment: ${filePath}`);
+      try {
+        const url = await uploadFile(filePath, file);
+        attachmentUrls.push(url);
+        console.log(`Attachment uploaded successfully: ${url}`);
+      } catch (err) {
+        console.error(`Error uploading attachment: ${err}`);
+        throw err;
+      }
     }
   }
 
-  // Create message
-  const messageId = await addDocument<Omit<Message, 'id'>>(
-    `${COLLECTIONS.MESSAGES}/${conversationId}/messages`,
-    {
-      conversationId,
-      senderId,
-      receiverId,
-      content,
-      attachments: attachmentUrls,
-      read: false
+  // Check if conversation exists first
+  try {
+    const conversation = await getConversation(conversationId);
+    if (!conversation) {
+      console.error(`Conversation with ID ${conversationId} does not exist`);
+      throw new Error(`Conversation with ID ${conversationId} does not exist`);
     }
-  );
+    console.log(`Found conversation: ${JSON.stringify(conversation)}`);
+  } catch (err) {
+    console.error(`Error checking conversation: ${err}`);
+    throw err;
+  }
+
+  // Create message
+  console.log(`Creating message in ${COLLECTIONS.MESSAGES}/${conversationId}/messages`);
+  let messageId;
+  try {
+    messageId = await addDocument<Omit<Message, 'id'>>(
+      `${COLLECTIONS.MESSAGES}/${conversationId}/messages`,
+      {
+        conversationId,
+        senderId,
+        receiverId,
+        content,
+        attachments: attachmentUrls,
+        read: false
+      }
+    );
+    console.log(`Message created with ID: ${messageId}`);
+  } catch (err) {
+    console.error(`Error creating message: ${err}`);
+    throw err;
+  }
 
   // Update conversation's last message
-  await addDocument<any>(
-    COLLECTIONS.MESSAGES,
-    conversationId,
-    {
-      lastMessage: {
-        content,
-        senderId,
-        timestamp: new Date()
+  console.log(`Updating conversation's last message`);
+  try {
+    await updateDocument<Conversation>(
+      COLLECTIONS.MESSAGES,
+      conversationId,
+      {
+        lastMessage: {
+          content,
+          senderId,
+          timestamp: new Date()
+        }
       }
-    }
-  );
+    );
+    console.log(`Conversation last message updated successfully`);
+  } catch (err) {
+    console.error(`Error updating conversation's last message: ${err}`);
+    // Don't throw here to avoid blocking the message send if only the last message update fails
+    console.warn(`Message was sent but conversation metadata could not be updated`);
+  }
 
   return messageId;
 };
@@ -214,9 +254,13 @@ export const markMessagesAsRead = async (
 
   // Update each unread message
   const updates = messages.map(message =>
-    addDocument(`${COLLECTIONS.MESSAGES}/${conversationId}/messages`, message.id, {
-      read: true
-    })
+    updateDocument<Message>(
+      `${COLLECTIONS.MESSAGES}/${conversationId}/messages`,
+      message.id,
+      {
+        read: true
+      }
+    )
   );
 
   await Promise.all(updates);

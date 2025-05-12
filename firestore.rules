@@ -32,7 +32,19 @@ service cloud.firestore {
     }
     
     // Messages collection - allow authenticated users to read/write messages
-    match /messages/{messageId} {
+    match /messages/{conversationId} {
+      allow read: if true;
+      allow write: if true; // For development
+      
+      // FIXED: Explicitly allow access to messages subcollection with correct path
+      match /messages/{messageId} {
+        allow read: if true;
+        allow write: if true; // For development
+      }
+    }
+    
+    // Payments collection - allow authenticated users to manage payments
+    match /payments/{paymentId} {
       allow read: if true;
       allow write: if true; // For development
     }

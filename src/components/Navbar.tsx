@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Sun, Moon, PlusCircle, User as UserIcon, LogOut, Settings } from 'lucide-react';
+import { Menu, X, Sun, Moon, PlusCircle, User as UserIcon, LogOut, Settings, LayoutDashboard, CreditCard, Wallet, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { getUserProfile, isUserSeller } from '@/lib/services/user.service';
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 const Navbar = () => {
   const [isDark, setIsDark] = useState(false);
@@ -178,7 +179,7 @@ const Navbar = () => {
                           className="flex items-center px-4 py-2 text-sm hover:bg-accent"
                           onClick={() => setUserMenuOpen(false)}
                         >
-                          <UserIcon className="h-4 w-4 mr-2" />
+                          <LayoutDashboard className="h-4 w-4 mr-2" />
                           Buyer Dashboard
                         </Link>
                         
@@ -192,6 +193,33 @@ const Navbar = () => {
                             Seller Dashboard
                           </Link>
                         )}
+                        
+                        <Link 
+                          to="/payment-dashboard" 
+                          className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Payment Dashboard
+                        </Link>
+                        
+                        <Link 
+                          to="/messages" 
+                          className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Messages
+                        </Link>
+                        
+                        <Link 
+                          to="/test-payment" 
+                          className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          <Wallet className="h-4 w-4 mr-2" />
+                          Test Payment
+                        </Link>
                       </div>
                       
                       <div className="border-t border-border py-1">
@@ -272,7 +300,7 @@ const Navbar = () => {
                         className="flex items-center px-4 py-2 text-sm hover:bg-accent"
                         onClick={() => setUserMenuOpen(false)}
                       >
-                        <UserIcon className="h-4 w-4 mr-2" />
+                        <LayoutDashboard className="h-4 w-4 mr-2" />
                         Buyer Dashboard
                       </Link>
                       
@@ -286,6 +314,33 @@ const Navbar = () => {
                           Seller Dashboard
                         </Link>
                       )}
+                      
+                      <Link 
+                        to="/payment-dashboard" 
+                        className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Payment Dashboard
+                      </Link>
+                      
+                      <Link 
+                        to="/messages" 
+                        className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Messages
+                      </Link>
+                      
+                      <Link 
+                        to="/test-payment" 
+                        className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <Wallet className="h-4 w-4 mr-2" />
+                        Test Payment
+                      </Link>
                     </div>
                     
                     <div className="border-t border-border py-1">
@@ -399,6 +454,27 @@ const Navbar = () => {
                       Seller Dashboard
                     </Link>
                   )}
+                  <Link 
+                    to="/payment-dashboard" 
+                    onClick={closeMenu}
+                    className="block w-full mb-2 text-center py-2 font-medium transition-colors hover:text-primary"
+                  >
+                    Payment Dashboard
+                  </Link>
+                  <Link 
+                    to="/messages" 
+                    onClick={closeMenu}
+                    className="block w-full mb-2 text-center py-2 font-medium transition-colors hover:text-primary"
+                  >
+                    Messages
+                  </Link>
+                  <Link 
+                    to="/test-payment" 
+                    onClick={closeMenu}
+                    className="block w-full mb-2 text-center py-2 font-medium transition-colors hover:text-primary"
+                  >
+                    Test Payment
+                  </Link>
                   <button
                     onClick={() => {
                       closeMenu();

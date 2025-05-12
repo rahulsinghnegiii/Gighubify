@@ -72,7 +72,50 @@ const SellerDashboard = () => {
         
         // Fetch orders
         const sellerOrders = await getSellerOrders(currentUser.uid);
-        setOrders(sellerOrders);
+        
+        // Enhance orders with buyer information
+        const enhancedOrders = await Promise.all(
+          sellerOrders.map(async (order) => {
+            try {
+              if (order.buyerId) {
+                console.log(`Fetching buyer profile for order ${order.id}, buyerId: ${order.buyerId}`);
+                const buyerProfile = await getUserProfile(order.buyerId);
+                
+                if (!buyerProfile) {
+                  console.warn(`Buyer profile not found for buyerId: ${order.buyerId}`);
+                  return {
+                    ...order,
+                    buyerName: `User (${order.buyerId.substring(0, 6)}...)`,
+                    buyerEmail: null
+                  };
+                }
+                
+                console.log(`Found buyer: ${buyerProfile.displayName || 'No name'} for order ${order.id}`);
+                return {
+                  ...order,
+                  buyerName: buyerProfile.displayName || 'Anonymous User',
+                  buyerEmail: buyerProfile.email
+                };
+              } else {
+                console.warn(`Order ${order.id} has no buyerId`);
+                return {
+                  ...order,
+                  buyerName: 'Unknown User',
+                  buyerEmail: null
+                };
+              }
+            } catch (err) {
+              console.error(`Error fetching buyer info for order ${order.id}:`, err);
+              return {
+                ...order,
+                buyerName: `Error: ${(err as Error).message?.substring(0, 20) || 'Unknown error'}`,
+                buyerEmail: null
+              };
+            }
+          })
+        );
+        
+        setOrders(enhancedOrders);
         
         // Calculate stats
         let totalEarnings = 0;
@@ -80,7 +123,7 @@ const SellerDashboard = () => {
         let activeOrders = 0;
         let cancelledOrders = 0;
         
-        sellerOrders.forEach(order => {
+        enhancedOrders.forEach(order => {
           if (order.status === OrderStatus.COMPLETED) {
             totalEarnings += order.price;
             completedOrders++;
@@ -543,7 +586,7 @@ const SellerDashboard = () => {
                             </h3>
                             <div className="flex items-center text-sm text-muted-foreground">
                               <span className="mr-3">Order ID: {order.id.substring(0, 8)}</span>
-                              <span>Buyer: {order.buyerName || 'Unknown'}</span>
+                              <span>Buyer: {order.buyerName || (order.buyerId ? `ID: ${order.buyerId.substring(0, 8)}...` : 'Unknown')}</span>
                             </div>
                           </div>
                           <div className="mt-2 md:mt-0">
@@ -599,7 +642,30 @@ const SellerDashboard = () => {
                           )}
                           
                           <button 
-                            onClick={() => navigate(`/messages/${order.buyerId}`)}
+                            onClick={async () => {
+                              try {
+                                if (!order.buyerId) {
+                                console.error("Cannot message buyer: Missing buyer ID");
+                                alert("Cannot message buyer: Contact information unavailable");
+                                  return;
+                                }
+                                
+                                console.log(`Attempting to navigate to messages with buyer: ${order.buyerId}`);
+                                
+                                // Try to get the buyer profile to validate the ID before navigating
+                                const buyerExists = await getUserProfile(order.buyerId);
+                                if (!buyerExists) {
+                                  console.error(`Buyer with ID ${order.buyerId} not found in database`);
+                                  alert("Cannot message buyer: User not found in our system");
+                                  return;
+                                }
+                                
+                                navigate(`/messages/${order.buyerId}`);
+                              } catch (err) {
+                                console.error("Error navigating to messages:", err);
+                                alert("Cannot access messaging at this time. Please try again later.");
+                              }
+                            }}
                             className="py-2 px-4 text-sm rounded-md bg-muted hover:bg-accent transition-colors"
                           >
                             Message Buyer
@@ -662,7 +728,7 @@ const SellerDashboard = () => {
                                   (Order #{order.id.substring(0, 8)})
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-sm">{order.buyerName || 'Unknown'}</td>
+                              <td className="py-3 px-4 text-sm">{order.buyerName || (order.buyerId ? `ID: ${order.buyerId.substring(0, 8)}...` : 'Unknown')}</td>
                               <td className="py-3 px-4 text-sm text-right font-medium">${order.price}</td>
                             </tr>
                           ))}
