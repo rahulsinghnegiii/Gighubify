@@ -5,57 +5,49 @@ import {
   updateDocument,
   subscribeToDocument,
   subscribeToCollection,
-  COLLECTIONS
+  COLLECTIONS,
+  serverTimestamp
 } from '../firebase/firestore';
+import { 
+  OrderStatus, 
+  Actor, 
+  isValidTransition, 
+  getValidNextStates 
+} from '../utils/order-state.util';
+import { Order } from '../models/order.model';
 
-// Order status enum
-export enum OrderStatus {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
-  DELIVERED = 'delivered',
-  REVISION_REQUESTED = 'revision_requested',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled'
-}
-
-// Order interface
-export interface Order {
-  id: string;
-  serviceId: string;
-  sellerId: string;
-  buyerId: string;
-  packageType?: 'basic' | 'standard' | 'premium'; // Made optional for backward compatibility
-  packageId?: string; // Added for new order structure
-  packageDetails?: { // Added for new order structure
-    name: string;
-    description?: string;
-    deliveryTime: number;
-    revisions: number;
-    price: number;
-  };
-  requirements: string;
-  attachments?: string[];
-  price: number;
-  totalAmount?: number; // Adding totalAmount field as optional for backward compatibility
-  deliveryTime?: number; // Made optional since it may be inside packageDetails
-  status: OrderStatus;
-  isPaid: boolean;
-  createdAt: any;
-  updatedAt: any;
-  completedAt?: any;
-  revisionCount?: number; // Added for new order structure
+// Order state transition error
+export class OrderStateTransitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OrderStateTransitionError';
+  }
 }
 
 /**
  * Create a new order
  */
 export const createOrder = async (
-  orderData: Omit<Order, 'id' | 'status' | 'isPaid' | 'createdAt' | 'updatedAt'>
+  orderData: Omit<Order, 'id' | 'status' | 'isPaid' | 'createdAt' | 'updatedAt' | 'statusHistory'>
 ): Promise<string> => {
+  const timestamp = serverTimestamp();
+  
+  const initialStatus = OrderStatus.PENDING;
+  
+  // Create status history entry
+  const statusHistory = [{
+    status: initialStatus,
+    timestamp,
+    actorId: orderData.buyerId,
+    note: 'Order created'
+  }];
+  
   return await addDocument<Omit<Order, 'id'>>(COLLECTIONS.ORDERS, {
     ...orderData,
-    status: OrderStatus.PENDING,
-    isPaid: false
+    status: initialStatus,
+    isPaid: false,
+    statusHistory,
+    revisionCount: 0
   });
 };
 
@@ -67,46 +59,231 @@ export const getOrder = async (orderId: string): Promise<Order | null> => {
 };
 
 /**
- * Update an order's status
+ * Update an order's status with validation
  */
 export const updateOrderStatus = async (
   orderId: string,
-  status: OrderStatus
+  newStatus: OrderStatus,
+  actorId: string,
+  actorType: Actor,
+  note?: string
 ): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, { status });
+  // Get the current order
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  const currentStatus = order.status;
+  
+  // Validate the state transition
+  if (!isValidTransition(currentStatus, newStatus, actorType)) {
+    throw new OrderStateTransitionError(
+      `Invalid transition from ${currentStatus} to ${newStatus} by ${actorType}`
+    );
+  }
+  
+  // Create timestamp for this status change
+  const timestamp = serverTimestamp();
+  
+  // Create status history entry
+  const statusHistoryEntry = {
+    status: newStatus,
+    timestamp,
+    actorId,
+    note: note || `Status changed from ${currentStatus} to ${newStatus}`
+  };
+  
+  // Update order with new status and append to status history
+  const updateData: Partial<Order> = {
+    status: newStatus,
+    updatedAt: timestamp,
+    statusHistory: [...(order.statusHistory || []), statusHistoryEntry]
+  };
+  
+  // Add specific timestamp based on the new status
+  switch (newStatus) {
+    case OrderStatus.IN_PROGRESS:
+      updateData.paidAt = timestamp;
+      break;
+    case OrderStatus.DELIVERED:
+      updateData.deliveredAt = timestamp;
+      break;
+    case OrderStatus.REVISION_REQUESTED:
+      updateData.revisionRequestedAt = timestamp;
+      updateData.revisionCount = (order.revisionCount || 0) + 1;
+      updateData.currentRevisionRequest = {
+        message: note || 'Revision requested',
+        requestedAt: timestamp
+      };
+      break;
+    case OrderStatus.ACCEPTED:
+      updateData.acceptedAt = timestamp;
+      break;
+    case OrderStatus.COMPLETED:
+      updateData.completedAt = timestamp;
+      break;
+    case OrderStatus.CANCELLED:
+      updateData.cancelledAt = timestamp;
+      if (note) {
+        updateData.cancellationReason = note;
+      }
+      break;
+    case OrderStatus.DISPUTED:
+      updateData.disputedAt = timestamp;
+      if (note) {
+        updateData.disputeReason = note;
+      }
+      break;
+  }
+  
+  await updateDocument(COLLECTIONS.ORDERS, orderId, updateData);
 };
 
 /**
- * Mark an order as paid
+ * Mark an order as paid and change status to IN_PROGRESS
  */
 export const markOrderAsPaid = async (orderId: string): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, { 
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  if (order.isPaid) {
+    console.log(`Order ${orderId} is already marked as paid`);
+    return;
+  }
+  
+  // Update payment status
+  const updateData: Partial<Order> = {
     isPaid: true,
-    status: OrderStatus.IN_PROGRESS 
-  });
+    updatedAt: serverTimestamp()
+  };
+  
+  await updateDocument(COLLECTIONS.ORDERS, orderId, updateData);
+  
+  // Update order status to IN_PROGRESS
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.IN_PROGRESS,
+    'system', // System is marking the order as paid
+    Actor.SYSTEM,
+    'Payment received, order in progress'
+  );
 };
 
 /**
- * Mark an order as delivered
+ * Submit delivery for an order
  */
-export const markOrderAsDelivered = async (
+export const deliverOrder = async (
   orderId: string,
+  sellerId: string,
+  message: string,
   deliverableFiles: string[]
 ): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, {
-    status: OrderStatus.DELIVERED,
-    attachments: deliverableFiles
-  });
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  // Verify the seller is authorized
+  if (order.sellerId !== sellerId) {
+    throw new Error('You are not authorized to deliver this order');
+  }
+  
+  // Update order with delivery info
+  const timestamp = serverTimestamp();
+  const updateData: Partial<Order> = {
+    currentDelivery: {
+      message,
+      files: deliverableFiles,
+      deliveredAt: timestamp
+    },
+    updatedAt: timestamp
+  };
+  
+  await updateDocument(COLLECTIONS.ORDERS, orderId, updateData);
+  
+  // Update order status to DELIVERED
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.DELIVERED,
+    sellerId,
+    Actor.SELLER,
+    message
+  );
 };
 
 /**
- * Complete an order
+ * Buyer accepts delivery of an order
  */
-export const completeOrder = async (orderId: string): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, {
-    status: OrderStatus.COMPLETED,
-    completedAt: new Date()
-  });
+export const acceptDelivery = async (
+  orderId: string,
+  buyerId: string,
+  feedback?: string
+): Promise<void> => {
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  // Verify the buyer is authorized
+  if (order.buyerId !== buyerId) {
+    throw new Error('You are not authorized to accept this delivery');
+  }
+  
+  // Update order status to ACCEPTED
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.ACCEPTED,
+    buyerId,
+    Actor.BUYER,
+    feedback || 'Delivery accepted'
+  );
+  
+  // After acceptance, the system will automatically move to COMPLETED (in a real system, this would happen when escrow releases the funds)
+  // This will be handled by the escrow service in future updates
+  setTimeout(async () => {
+    try {
+      await updateOrderStatus(
+        orderId,
+        OrderStatus.COMPLETED,
+        'system',
+        Actor.SYSTEM,
+        'Funds released to seller'
+      );
+    } catch (error) {
+      console.error(`Error completing order ${orderId}:`, error);
+    }
+  }, 1000);
+};
+
+/**
+ * Buyer requests a revision
+ */
+export const requestRevision = async (
+  orderId: string,
+  buyerId: string,
+  revisionInstructions: string
+): Promise<void> => {
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  // Verify the buyer is authorized
+  if (order.buyerId !== buyerId) {
+    throw new Error('You are not authorized to request a revision for this order');
+  }
+  
+  // Update order status to REVISION_REQUESTED
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.REVISION_REQUESTED,
+    buyerId,
+    Actor.BUYER,
+    revisionInstructions
+  );
 };
 
 /**
@@ -114,25 +291,61 @@ export const completeOrder = async (orderId: string): Promise<void> => {
  */
 export const cancelOrder = async (
   orderId: string,
+  actorId: string,
+  actorType: Actor,
   cancellationReason: string
 ): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, {
-    status: OrderStatus.CANCELLED,
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  // Verify authorization (depending on the actor type)
+  if (actorType === Actor.BUYER && order.buyerId !== actorId) {
+    throw new Error('You are not authorized to cancel this order');
+  } else if (actorType === Actor.SELLER && order.sellerId !== actorId) {
+    throw new Error('You are not authorized to cancel this order');
+  }
+  
+  // Update order status to CANCELLED
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.CANCELLED,
+    actorId,
+    actorType,
     cancellationReason
-  });
+  );
 };
 
 /**
- * Request a revision for an order
+ * Open a dispute for an order
  */
-export const requestRevision = async (
+export const openDispute = async (
   orderId: string,
-  revisionInstructions: string
+  actorId: string,
+  actorType: Actor,
+  disputeReason: string
 ): Promise<void> => {
-  await updateDocument<Order>(COLLECTIONS.ORDERS, orderId, {
-    status: OrderStatus.REVISION_REQUESTED,
-    revisionInstructions
-  });
+  const order = await getOrder(orderId);
+  if (!order) {
+    throw new Error(`Order with ID ${orderId} not found`);
+  }
+  
+  // Verify authorization (depending on the actor type)
+  if (actorType === Actor.BUYER && order.buyerId !== actorId) {
+    throw new Error('You are not authorized to open a dispute for this order');
+  } else if (actorType === Actor.SELLER && order.sellerId !== actorId) {
+    throw new Error('You are not authorized to open a dispute for this order');
+  }
+  
+  // Update order status to DISPUTED
+  await updateOrderStatus(
+    orderId,
+    OrderStatus.DISPUTED,
+    actorId,
+    actorType,
+    disputeReason
+  );
 };
 
 /**
@@ -158,17 +371,43 @@ export const getSellerOrders = async (sellerId: string): Promise<Order[]> => {
 };
 
 /**
- * Get active orders for a seller (in progress or revision requested)
+ * Get active orders for a seller (in progress, delivered, or revision requested)
  */
 export const getActiveSellerOrders = async (sellerId: string): Promise<Order[]> => {
   return await getDocuments<Order>(COLLECTIONS.ORDERS, {
     whereConditions: [
       ['sellerId', '==', sellerId],
-      ['status', 'in', [OrderStatus.IN_PROGRESS, OrderStatus.REVISION_REQUESTED]]
+      ['status', 'in', [OrderStatus.IN_PROGRESS, OrderStatus.DELIVERED, OrderStatus.REVISION_REQUESTED]]
     ],
     orderByField: 'createdAt',
     orderDirection: 'desc'
   });
+};
+
+/**
+ * Get available actions for an order based on current status and actor
+ */
+export const getAvailableOrderActions = (order: Order, actorId: string): { 
+  actorType: Actor,
+  availableActions: OrderStatus[]
+} => {
+  let actorType: Actor;
+  
+  if (order.buyerId === actorId) {
+    actorType = Actor.BUYER;
+  } else if (order.sellerId === actorId) {
+    actorType = Actor.SELLER;
+  } else {
+    // Assume it's an admin or system for now
+    actorType = Actor.ADMIN;
+  }
+  
+  const availableActions = getValidNextStates(order.status, actorType);
+  
+  return {
+    actorType,
+    availableActions
+  };
 };
 
 /**
