@@ -5,6 +5,7 @@ import { getOrder, Order, OrderStatus } from '@/lib/services/order.service';
 import { getService } from '@/lib/services/service.service';
 import { getUserProfile } from '@/lib/services/user.service';
 import { getPaymentByOrderId } from '@/lib/services/payment.service';
+import { PLATFORM_FEE_PERCENTAGE } from '@/lib/utils/fee.util';
 import { 
   Card, 
   CardContent, 
@@ -251,61 +252,92 @@ const OrderDetail = () => {
           </CardContent>
         </Card>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {order.isPaid ? (
-                <div className="space-y-4">
-                  <div className="flex items-center text-green-600">
-                    <Check className="h-5 w-5 mr-2" />
-                    <span className="font-medium">Paid</span>
-                  </div>
-                  
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <CreditCard className="h-5 w-5 mr-2" />
+              Payment Information
+            </CardTitle>
+          </CardHeader>
+          
+          <CardContent>
+            {order.isPaid ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Payment Method</h4>
-                    <p className="flex items-center">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      {payment?.gateway === 'stripe' ? 'Stripe' : payment?.gateway === 'razorpay' ? 'Razorpay' : order.paymentMethod || 'Credit Card'}
+                    <h3 className="text-sm font-medium text-muted-foreground">Payment Status</h3>
+                    <p className="font-medium">
+                      <Badge variant="success" className="mt-1">Paid</Badge>
                     </p>
                   </div>
                   
-                  {payment && (
-                    <>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Payment Date</h4>
-                        <p>{formatDate(payment.completedAt || payment.createdAt)}</p>
-                      </div>
-                      
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Payment ID</h4>
-                        <p className="text-sm font-mono">{payment.id}</p>
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground">Payment Method</h3>
+                    <p className="font-medium">{order.paymentMethod || 'Credit Card'}</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center text-yellow-600">
-                    <AlertCircle className="h-5 w-5 mr-2" />
-                    <span className="font-medium">Payment Pending</span>
+                
+                <Separator />
+                
+                {/* Fee breakdown */}
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Base Amount</span>
+                    <span className="font-medium">${order.baseAmount?.toFixed(2) || order.totalAmount?.toFixed(2)}</span>
                   </div>
                   
-                  {isBuyer && (
-                    <Button 
-                      onClick={() => navigate(`/checkout/${orderId}`)}
-                      className="w-full"
-                    >
-                      Pay Now
-                    </Button>
+                  {order.platformFee ? (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Platform Fee ({PLATFORM_FEE_PERCENTAGE}%)</span>
+                      <span className="font-medium">${order.platformFee?.toFixed(2)}</span>
+                    </div>
+                  ) : null}
+                  
+                  <div className="flex justify-between font-bold">
+                    <span>Total</span>
+                    <span>${order.totalAmount?.toFixed(2)}</span>
+                  </div>
+                  
+                  {isSeller && order.sellerAmount && (
+                    <div className="flex justify-between text-primary font-medium pt-2">
+                      <span>You Receive</span>
+                      <span>${order.sellerAmount?.toFixed(2)}</span>
+                    </div>
                   )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          
+                
+                {payment && payment.status === 'completed' && (
+                  <div className="mt-2 flex items-center text-sm text-muted-foreground">
+                    <Check className="h-4 w-4 mr-1 text-green-500" />
+                    Payment processed on {formatDate(payment.completedAt)}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Alert variant="warning" className="mt-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Payment Pending</AlertTitle>
+                  <AlertDescription>
+                    This order has not been paid for yet.
+                  </AlertDescription>
+                </Alert>
+                
+                {isBuyer && (
+                  <Button 
+                    className="w-full mt-4"
+                    onClick={() => navigate(`/checkout/${order.id}`)}
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Pay Now
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>{isBuyer ? 'Seller' : 'Buyer'} Information</CardTitle>

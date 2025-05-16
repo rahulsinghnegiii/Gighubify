@@ -8,7 +8,8 @@ import {
   completeStripePayment 
 } from '@/lib/services/payment.service';
 import { getUserLocationInfo } from '@/lib/utils/geo.util';
-import { CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
+import { getOrderAmountBreakdown, PLATFORM_FEE_PERCENTAGE } from '@/lib/utils/fee.util';
+import { CreditCard, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -169,6 +170,19 @@ const Checkout = () => {
     return order.totalAmount !== undefined ? order.totalAmount : order.price;
   };
   
+  // Function to get the base amount of the order
+  const getBaseAmount = (order) => {
+    return order.baseAmount !== undefined ? order.baseAmount : getOrderAmount(order);
+  };
+  
+  // Calculate fee breakdown information
+  const getFeeBreakdown = (order) => {
+    if (!order) return null;
+    
+    const baseAmount = getBaseAmount(order);
+    return getOrderAmountBreakdown(baseAmount);
+  };
+  
   // Add a helper function to safely get package details
   const getPackageDetails = (order) => {
     return order.packageDetails || {
@@ -190,24 +204,22 @@ const Checkout = () => {
         throw new Error('Selected payment method not found');
       }
       
-      // Get the amount using the helper function
-      const amount = getOrderAmount(order);
+      // Get the base amount using the helper function
+      const baseAmount = getBaseAmount(order);
       
       // Create payment record using Stripe
       const result = await createPayment(
         order.id,
-        amount,
+        baseAmount,
         locationInfo.currency,
-        PaymentGateway.STRIPE
+        selectedMethod.gateway
       );
       
-      const { paymentId, gatewayData } = result;
-      
-      // Initialize Stripe checkout
-      await handleStripeCheckout(paymentId, gatewayData);
+      if (selectedMethod.gateway === PaymentGateway.STRIPE) {
+        await handleStripeCheckout(result.paymentId, result.gatewayData);
+      }
     } catch (err: any) {
-      console.error('Payment initialization error:', err);
-      setError(err.message || 'Failed to initialize payment');
+      setError(err.message || 'Failed to process payment');
       setProcessing(false);
     }
   };
@@ -349,116 +361,178 @@ const Checkout = () => {
   }
   
   return (
-    <div className="container max-w-4xl mx-auto py-12 px-4">
-      <h1 className="text-3xl font-bold tracking-tight mb-6">Checkout</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Method</CardTitle>
-              <CardDescription>Select your preferred payment method</CardDescription>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-4">
-                {paymentMethods.length > 0 ? (
-                  <>
-                    <Select onValueChange={handlePaymentMethodChange} defaultValue={selectedPaymentMethod || undefined}>
-                      <SelectTrigger className="w-full">
+    <div className="container mx-auto py-12 px-4 pt-24 pb-16">
+      <div className="max-w-4xl mx-auto">
+        <Button 
+          variant="ghost" 
+          onClick={() => navigate(-1)}
+          className="mb-6 flex items-center"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        
+        <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+        
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {success && (
+          <Alert className="mb-6 bg-green-50 border-green-200">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <AlertTitle className="text-green-700">Payment Successful!</AlertTitle>
+            <AlertDescription className="text-green-600">
+              Your payment was processed successfully. You will be redirected to your dashboard.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {loading ? (
+          <div className="bg-card p-8 rounded-lg border border-border/50 shadow-subtle">
+            <div className="flex items-center justify-center h-40">
+              <div className="h-8 w-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin"></div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-8 md:grid-cols-5">
+            <div className="md:col-span-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Order Summary</CardTitle>
+                  <CardDescription>
+                    Review your order details before payment
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {order && (
+                    <>
+                      <div>
+                        <h3 className="font-medium mb-1">Service</h3>
+                        <p>{order.serviceName || 'Custom Service'}</p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-medium mb-1">Package</h3>
+                        <p>{getPackageDetails(order).name}</p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-medium mb-1">Delivery Time</h3>
+                        <p>{getPackageDetails(order).deliveryTime} days</p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-medium mb-1">Revisions</h3>
+                        <p>{getPackageDetails(order).revisions}</p>
+                      </div>
+                      
+                      {order.requirements && (
+                        <div>
+                          <h3 className="font-medium mb-1">Requirements</h3>
+                          <p className="text-sm text-muted-foreground">{order.requirements}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+                
+                <CardHeader className="border-t border-border pt-6 pb-0">
+                  <CardTitle>Select Payment Method</CardTitle>
+                </CardHeader>
+                
+                <CardContent className="pt-4">
+                  {paymentMethods.length > 0 ? (
+                    <Select 
+                      value={selectedPaymentMethod || undefined}
+                      onValueChange={handlePaymentMethodChange}
+                    >
+                      <SelectTrigger>
                         <SelectValue placeholder="Select payment method" />
                       </SelectTrigger>
+                      
                       <SelectContent>
-                        {paymentMethods.map((method) => (
+                        {paymentMethods.map(method => (
                           <SelectItem key={method.id} value={method.id}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center">
                               {method.icon}
-                              <span>{method.name}</span>
+                              <span className="ml-2">{method.name}</span>
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    
-                    {selectedPaymentMethod && (
-                      <div className="mt-4 p-4 bg-muted rounded-md">
-                        <p className="text-sm text-muted-foreground">
-                          {paymentMethods.find(m => m.id === selectedPaymentMethod)?.description}
+                  ) : (
+                    <p className="text-muted-foreground">No payment methods available.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div className="md:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Details</CardTitle>
+                </CardHeader>
+                
+                <CardContent className="space-y-6">
+                  {order && (
+                    <>
+                      {/* Fee breakdown */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Base Amount</span>
+                          <span>${getBaseAmount(order).toFixed(2)}</span>
+                        </div>
+                        
+                        <div className="flex justify-between text-sm text-primary">
+                          <span>Platform Fee ({PLATFORM_FEE_PERCENTAGE}%)</span>
+                          <span>${getFeeBreakdown(order)?.platformFee.toFixed(2)}</span>
+                        </div>
+                        
+                        <Separator className="my-2" />
+                        
+                        <div className="flex justify-between font-medium">
+                          <span>Total</span>
+                          <span>${getFeeBreakdown(order)?.totalWithFee.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2 text-xs text-muted-foreground">
+                        <p>
+                          By proceeding with the payment, you agree to our Terms of Service and Privacy Policy.
+                        </p>
+                        <p>
+                          Payment will be securely processed and held in escrow until the service is completed.
                         </p>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center py-4">
-                    <p>Payment options are currently unavailable</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-            
-            <CardFooter>
-              <Button 
-                size="lg" 
-                className="w-full" 
-                onClick={initializePayment}
-                disabled={processing || !selectedPaymentMethod}
-              >
-                {processing ? (
-                  <>
-                    <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-2"></div>
-                    Processing...
-                  </>
-                ) : (
-                  `Pay ${locationInfo?.currency || 'USD'} ${getOrderAmount(order).toFixed(2)}`
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-        
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service</span>
-                  <span className="font-medium">{getPackageDetails(order).name}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Delivery Time</span>
-                  <span className="font-medium">{getPackageDetails(order).deliveryTime} days</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Revisions</span>
-                  <span className="font-medium">{getPackageDetails(order).revisions}</span>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex justify-between">
-                  <span className="font-medium">Total</span>
-                  <span className="font-bold">{locationInfo?.currency || 'USD'} {getOrderAmount(order).toFixed(2)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <div className="mt-4">
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => navigate('/dashboard')}
-            >
-              Cancel Payment
-            </Button>
+                      
+                      <Button 
+                        className="w-full"
+                        onClick={initializePayment}
+                        disabled={processing || !selectedPaymentMethod}
+                      >
+                        {processing ? (
+                          <>
+                            <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-2"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          `Pay $${getFeeBreakdown(order)?.totalWithFee.toFixed(2)}`
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

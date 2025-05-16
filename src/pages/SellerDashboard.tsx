@@ -12,6 +12,7 @@ import {
   ShoppingBag, PlusCircle, DollarSign, BarChart3, 
   Calendar, Briefcase, MessageSquare
 } from 'lucide-react';
+import { PLATFORM_FEE_PERCENTAGE } from '@/lib/utils/fee.util';
 
 const SellerDashboard = () => {
   const { currentUser } = useAuth();
@@ -309,6 +310,9 @@ const SellerDashboard = () => {
                       <div>
                         <p className="text-sm text-muted-foreground">Total Earnings</p>
                         <h3 className="font-bold text-xl">${stats.totalEarnings.toFixed(2)}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          After {PLATFORM_FEE_PERCENTAGE}% platform fee
+                        </p>
                       </div>
                     </div>
                   </div>

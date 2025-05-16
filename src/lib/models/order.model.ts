@@ -24,6 +24,9 @@ export interface Order {
   cancelledAt?: FirestoreTimestamp;
   revisionCount: number;
   totalAmount: number;
+  baseAmount: number;
+  platformFee: number;
+  sellerAmount: number;
   isPaid: boolean;
   paymentId?: string;
   paymentMethod?: string;

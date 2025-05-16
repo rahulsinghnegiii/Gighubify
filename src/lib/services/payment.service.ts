@@ -9,6 +9,13 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Order, OrderStatus } from '../models/order.model';
 import { getIPAddress, isIndianIP } from '../utils/geo.util';
 import { getAuth } from 'firebase/auth';
+// Import the fee utility functions
+import { 
+  calculatePlatformFee,
+  calculateTotalWithFee,
+  calculateSellerAmount,
+  getOrderAmountBreakdown
+} from '../utils/fee.util';
 
 // Flag to determine if we're in development mode
 const DEV_MODE = true; // Toggle this to switch between local server and production
@@ -43,6 +50,9 @@ export interface Payment {
   gatewayId: string;  // ID from the payment gateway
   gateway: PaymentGateway;
   amount: number;
+  baseAmount: number; // Original order amount before fees
+  platformFee: number; // Platform fee amount
+  sellerAmount: number; // Amount seller will receive
   currency: string;
   status: PaymentStatus;
   paymentMethod?: string;
@@ -77,7 +87,7 @@ export const getAppropriateGateway = async (): Promise<PaymentGateway> => {
 // Create a new payment record
 export const createPayment = async (
   orderId: string, 
-  amount: number, 
+  baseAmount: number, 
   currency: string = 'USD',
   gateway?: PaymentGateway // If not provided, will be determined automatically
 ): Promise<{ paymentId: string, gatewayData: any }> => {
@@ -91,10 +101,16 @@ export const createPayment = async (
     // Always use Stripe regardless of what was passed
     gateway = PaymentGateway.STRIPE;
     
-    // Prepare payment data
+    // Calculate all fee-related amounts
+    const { platformFee, totalWithFee, sellerAmount } = getOrderAmountBreakdown(baseAmount);
+    
+    // Prepare payment data with fee information
     const paymentData = {
       orderId,
-      amount,
+      baseAmount,
+      amount: totalWithFee, // Total amount including platform fee
+      platformFee,
+      sellerAmount,
       currency,
       gateway,
       buyerId: order.buyerId,
@@ -152,7 +168,10 @@ export const createPayment = async (
         orderId,
         gatewayId: gatewayData.id,
         gateway,
-        amount,
+        baseAmount,
+        amount: totalWithFee,
+        platformFee,
+        sellerAmount,
         currency,
         status: PaymentStatus.PENDING,
         createdAt: new Date(),
@@ -162,8 +181,15 @@ export const createPayment = async (
       // Store in our mock storage
       mockPayments.set(paymentId, mockPayment);
       
-      // No need to update Firestore in dev mode - just log the action
-      console.log(`Mock operation: Updated order ${orderId} with paymentId ${paymentId} and payment method ${gateway}`);
+      // Update order with fee information in dev mode
+      console.log(`Mock operation: Updated order ${orderId} with fee information:`, {
+        baseAmount,
+        platformFee,
+        totalAmount: totalWithFee,
+        sellerAmount,
+        paymentId,
+        paymentMethod: gateway
+      });
       
       console.log('Mock payment created:', mockPayment);
       
@@ -211,20 +237,27 @@ export const createPayment = async (
       
       const { paymentId, gatewayData } = result;
       
-      // Create the payment record in Firestore
+      // Create the payment record in Firestore with fee information
       await addDocument<Omit<Payment, 'id'>>(COLLECTIONS.PAYMENTS, {
         orderId,
         gatewayId: gatewayData.id,
         gateway,
-        amount,
+        baseAmount,
+        amount: totalWithFee,
+        platformFee,
+        sellerAmount,
         currency,
         status: PaymentStatus.PENDING,
         createdAt: new Date(),
         updatedAt: new Date()
       });
       
-      // Update the order with the payment ID
+      // Update the order with the payment ID and fee information
       await updateDocument(COLLECTIONS.ORDERS, orderId, {
+        baseAmount,
+        platformFee,
+        totalAmount: totalWithFee,
+        sellerAmount,
         paymentId,
         paymentMethod: gateway
       });
